@@ -1,0 +1,30 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+*.egg-info/
+build/
+dist/
+
+# Local clinical data and generated outputs are intentionally excluded.
+data/
+predata/
+outputs/
+figures/
+*.mat
+*.npy
+*.npz
+*.pt
+*.pth
+*.ckpt
+*.onnx
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

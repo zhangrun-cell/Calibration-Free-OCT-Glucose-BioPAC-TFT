@@ -1,0 +1,2 @@
+u8darts[torch]>=0.30
+xgboost>=2.0
