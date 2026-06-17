@@ -138,10 +138,12 @@ windows are used as dynamic OCT covariates for the temporal model.
 Implementation entry point:
 
 ```python
-from biopac_tft_oct.features import dej_anchored_windows, extract_window_features
+from biopac_tft_oct.features import dej_anchored_features
 
-windows = dej_anchored_windows(dej_index=32, n_depth=oct_signal.shape[1])
-features = extract_window_features(corrected, windows)
+features, windows = dej_anchored_features(
+    corrected,
+    dej_index=32,
+)
 ```
 
 The resulting feature matrix has shape:
