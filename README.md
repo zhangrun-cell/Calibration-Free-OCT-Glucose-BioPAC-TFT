@@ -29,6 +29,8 @@ scripts/
 examples/
   demo_anonymized_sample.csv
 docs/
+  assets/figure3_biopac.jpg
+  biopac_workflow.md
   data_availability.md
 ```
 
@@ -85,6 +87,12 @@ Bio-PAC processes the depth-time OCT signal `I(t, z)` in two stages:
    depth-specific fitted component `alpha_z P(t)`.
 
 This implementation follows the formula logic described in the manuscript.
+
+The manuscript Figure 3 and a detailed step-by-step explanation of the Bio-PAC
+computational workflow are available in
+[`docs/biopac_workflow.md`](docs/biopac_workflow.md).
+
+![Figure 3. Bio-PAC implementation path](docs/assets/figure3_biopac.jpg)
 
 ## Evaluation
 
