@@ -12,6 +12,8 @@ examples without releasing private clinical OCT-glucose data.
 - DEJ-anchored five-window dynamic OCT feature construction.
 - Distribution-aware candidate averaging for overlapping predictions.
 - Regression metrics and Clarke error-grid zone percentages.
+- Organized MATLAB/Python research scripts that preserve the internal algorithm
+  structure without releasing private data.
 - A small synthetic/anonymized demo that verifies the public code path.
 
 ## What This Repository Does Not Reproduce
@@ -43,8 +45,9 @@ Key differences:
 2. **Structural envelope**
    - Original MATLAB code uses `abs(hilbert(scan))` followed by Gaussian
      smoothing.
-   - Public Python code uses a lightweight smoothed structural envelope based on
-     `abs(scan - median(scan))` to avoid requiring SciPy for the demo.
+   - Public Python code now follows the same logic using a NumPy FFT
+     implementation of the Hilbert analytic envelope and Gaussian smoothing, so
+     SciPy is not required for the demo.
 
 3. **Warping-field interpolation**
    - Original MATLAB code uses segment shifts and `pchip` interpolation.
@@ -76,15 +79,31 @@ The original internal training code is a full Darts workflow with private
 subject folders, subject-wise splitting, four models, long-horizon overlapping
 prediction, prediction export, and plotting scripts.
 
-The public repository provides only:
+The public repository provides:
 
 - the expected clinical CSV column format,
 - a Darts training template,
+- an organized subject-wise Darts pipeline skeleton in `research_code/python/`,
 - optional dependencies for Darts/XGBoost,
 - evaluation utilities for prediction CSV files.
 
 This is sufficient to explain the modeling design, but it is not a full
 clinical-result reproduction package.
+
+## Organized Original-Style Code
+
+The `research_code/` folder contains cleaned code that is intentionally closer
+to the internal research scripts than the compact public demo:
+
+- `research_code/matlab/biopac_preprocess_original_style.m` keeps the original
+  MATLAB Bio-PAC sequence: 200-pixel crop, Hilbert envelope, Gaussian smoothing,
+  segment-wise cross-correlation, PCHIP warping, epidermal z-score fingerprint,
+  and depth-wise regression subtraction.
+- `research_code/matlab/extract_five_depth_windows_original_style.m` organizes
+  the five-window extraction step with automatic site-constrained first-peak
+  anchoring and manual anchor override.
+- `research_code/python/tft_subjectwise_pipeline_skeleton.py` documents the
+  subject-wise Darts workflow without including private subject folders.
 
 ## Reviewer-Facing Interpretation
 

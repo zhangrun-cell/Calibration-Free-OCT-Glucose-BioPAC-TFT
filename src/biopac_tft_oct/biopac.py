@@ -40,21 +40,47 @@ def _as_time_depth(oct_signal: np.ndarray) -> np.ndarray:
     return x
 
 
-def _smooth_1d(values: np.ndarray, window: int) -> np.ndarray:
-    window = int(max(1, window))
-    if window == 1:
+def _analytic_envelope(scan: np.ndarray) -> np.ndarray:
+    """Return ``abs(hilbert(scan))`` using only NumPy FFT operations."""
+
+    x = np.asarray(scan, dtype=float)
+    n = x.size
+    spectrum = np.fft.fft(x)
+    multiplier = np.zeros(n, dtype=float)
+    if n % 2 == 0:
+        multiplier[0] = 1.0
+        multiplier[n // 2] = 1.0
+        multiplier[1 : n // 2] = 2.0
+    else:
+        multiplier[0] = 1.0
+        multiplier[1 : (n + 1) // 2] = 2.0
+    analytic = np.fft.ifft(spectrum * multiplier)
+    return np.abs(analytic)
+
+
+def _gaussian_smooth_1d(values: np.ndarray, sigma: float) -> np.ndarray:
+    sigma = float(max(0.0, sigma))
+    if sigma == 0.0:
         return values.astype(float, copy=True)
-    kernel = np.ones(window, dtype=float) / float(window)
-    pad = window // 2
+    radius = max(1, int(round(3.0 * sigma)))
+    grid = np.arange(-radius, radius + 1, dtype=float)
+    kernel = np.exp(-(grid**2) / (2.0 * sigma**2))
+    kernel /= np.sum(kernel)
+    pad = radius
     padded = np.pad(values, pad_width=pad, mode="edge")
     smoothed = np.convolve(padded, kernel, mode="valid")
     return smoothed[: values.size]
 
 
-def _structural_envelope(scan: np.ndarray, smooth_window: int) -> np.ndarray:
-    """Lightweight structural envelope used for segment matching."""
+def _structural_envelope(scan: np.ndarray, smooth_sigma: float) -> np.ndarray:
+    """Hilbert structural envelope used for segment matching.
 
-    return _smooth_1d(np.abs(scan - np.nanmedian(scan)), smooth_window)
+    This mirrors the original MATLAB preprocessing step:
+
+        smoothdata(abs(hilbert(scan)), 'gaussian', sigma)
+    """
+
+    return _gaussian_smooth_1d(_analytic_envelope(scan), smooth_sigma)
 
 
 def morphology_align(
@@ -96,7 +122,7 @@ def morphology_align(
     max_shift = int(max(0, max_shift))
 
     reference = x[0]
-    ref_envelope = _structural_envelope(reference, int(round(envelope_sigma_ref)))
+    ref_envelope = _structural_envelope(reference, envelope_sigma_ref)
     edges = np.round(np.linspace(0, n_depth, n_segments + 1)).astype(int)
     centers = 0.5 * (edges[:-1] + edges[1:] - 1)
 
@@ -106,7 +132,7 @@ def morphology_align(
 
     for t in range(n_time):
         current = x[t]
-        cur_envelope = _structural_envelope(current, int(round(envelope_sigma_current)))
+        cur_envelope = _structural_envelope(current, envelope_sigma_current)
         local_shifts = np.zeros(n_segments, dtype=float)
 
         for s in range(n_segments):

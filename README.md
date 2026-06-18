@@ -31,6 +31,9 @@ src/biopac_tft_oct/
 scripts/
   run_demo.py        # runnable demo using anonymized/synthetic data
   evaluate_predictions.py
+research_code/
+  matlab/            # organized MATLAB code close to the internal Bio-PAC scripts
+  python/            # organized subject-wise Darts workflow skeleton
 examples/
   demo_anonymized_sample.csv
   demo_predictions.csv
@@ -137,6 +140,11 @@ python scripts/evaluate_predictions.py examples\demo_predictions.csv
 Important implementation differences between the original internal research
 code and this public de-identified package are summarized in
 [`docs/implementation_notes.md`](docs/implementation_notes.md).
+
+Organized versions of the original research scripts are provided in
+[`research_code/`](research_code/). These files preserve the main internal
+algorithmic steps while removing clinical data, absolute paths, generated
+outputs, and cache files.
 
 ## Data Availability
 
