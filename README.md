@@ -1,8 +1,13 @@
 # Calibration-Free OCT Glucose Monitoring via Bio-PAC and TFT
 
-This repository provides a minimal reproducibility package for the manuscript:
+This repository accompanies the manuscript:
 
 **Calibration-Free and Generalizable OCT-Based Non-Invasive Glucose Monitoring via Bio-PAC and Temporal Fusion Transformer**
+
+It is intended as a publication-oriented and peer-review reproducibility package,
+providing the public implementation details needed to understand and verify the
+main computational workflow reported in the paper. The repository is a
+de-identified method package rather than a full clinical-data release.
 
 The code implements the core computational components used in the paper:
 
