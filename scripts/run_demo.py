@@ -20,6 +20,7 @@ from biopac_tft_oct import (  # noqa: E402
     biopac_process,
     clarke_percentages,
     dej_anchored_features,
+    dej_anchored_window_ranges,
     dense_candidate_average,
     regression_metrics,
 )
@@ -36,7 +37,19 @@ def main() -> None:
         oct_signal = synthesize_demo_oct(df["glucose_mmol_l"].to_numpy(dtype=float), n_depth=80)
 
     result = biopac_process(oct_signal, n_segments=6, max_shift=8, epidermis_depth=8)
-    features, windows = dej_anchored_features(result.corrected, dej_index=18, offsets=(8, 18, 28, 38, 48), half_width=4)
+    demo_offsets = (8, 18, 28, 38, 48)
+    features, windows = dej_anchored_features(
+        result.corrected,
+        dej_index=18,
+        offsets=demo_offsets,
+        half_width=5,
+    )
+    shifted_windows = dej_anchored_window_ranges(
+        dej_index=26,
+        n_depth=result.corrected.shape[1],
+        offsets=demo_offsets,
+        half_width=5,
+    )
 
     # The demo prediction is a simple noisy proxy so that metrics can be tested
     # without shipping clinical model weights.
@@ -55,6 +68,7 @@ def main() -> None:
     print("Bio-PAC demo completed")
     print(f"Corrected OCT shape: {result.corrected.shape}")
     print(f"DEJ windows: {windows}")
+    print(f"DEJ windows after moving the DEJ anchor from 18 to 26 pixels: {shifted_windows}")
     print(f"Feature matrix shape: {features.shape}")
     print("Regression metrics:")
     for key, value in metrics.items():

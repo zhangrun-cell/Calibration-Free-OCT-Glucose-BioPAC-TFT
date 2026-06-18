@@ -135,16 +135,42 @@ After Bio-PAC correction, the corrected depth-time signal is summarized into
 five depth windows anchored around the dermal-epidermal junction (DEJ). These
 windows are used as dynamic OCT covariates for the temporal model.
 
+The public code does not claim to automatically segment the DEJ from raw OCT
+images. Instead, the DEJ pixel is supplied from anatomical annotation,
+segmentation, or the study-specific preprocessing protocol. Once this
+`dej_index` is provided, the five windows are automatically repositioned by
+relative offsets:
+
+```text
+c_j = dej_index + offset_j
+W_j = [c_j - 5, c_j + 5]
+```
+
+Thus, when the DEJ is deeper or shallower in a subject or measurement site, all
+five window locations move with the DEJ anchor rather than staying at fixed
+surface-based pixel indices.
+
 Implementation entry point:
 
 ```python
-from biopac_tft_oct.features import dej_anchored_features
+from biopac_tft_oct.features import dej_anchored_features, dej_anchored_window_ranges
 
 features, windows = dej_anchored_features(
     corrected,
     dej_index=32,
+    offsets=(20, 40, 60, 80, 100),
+    half_width=5,
 )
 ```
+
+For example, with the same offsets and an 11-pixel window width:
+
+```python
+dej_anchored_window_ranges(dej_index=18, n_depth=160)
+dej_anchored_window_ranges(dej_index=26, n_depth=160)
+```
+
+the second call shifts all five depth windows eight pixels deeper.
 
 The resulting feature matrix has shape:
 

@@ -82,6 +82,13 @@ The five `slopmean` columns correspond to Bio-PAC-processed dynamic OCT
 depth-window features. Static covariates include age, sex, diabetes status, and
 measurement site.
 
+The DEJ-anchored window code uses the supplied DEJ pixel as the anatomical
+anchor and automatically shifts the five window centers as `dej_index + offset`.
+It does not claim to perform raw-image DEJ segmentation; the DEJ index should be
+provided by anatomical annotation, segmentation, or the study preprocessing
+protocol. The default window half-width is 5 pixels, giving the 11-pixel window
+definition used in the manuscript.
+
 ## Bio-PAC Summary
 
 Bio-PAC processes the depth-time OCT signal `I(t, z)` in two stages:

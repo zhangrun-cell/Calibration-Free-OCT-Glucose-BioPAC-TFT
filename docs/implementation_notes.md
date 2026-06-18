@@ -62,7 +62,10 @@ Key differences:
    - Original MATLAB code uses fixed center rules and half widths tied to the
      internal 200-pixel depth representation.
    - Public Python code exposes a generic DEJ-anchored function with configurable
-     `dej_index`, `offsets`, and `half_width`.
+     `dej_index`, `offsets`, and `half_width`. The released function does not
+     perform raw-image DEJ segmentation; after the DEJ pixel is supplied, each
+     window center is automatically shifted as `dej_index + offset`, with the
+     default `half_width=5` matching the manuscript's 11-pixel window definition.
 
 ## Differences From the Original Darts Training Pipeline
 
