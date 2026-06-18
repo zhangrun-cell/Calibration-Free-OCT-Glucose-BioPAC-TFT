@@ -28,10 +28,12 @@ scripts/
   evaluate_predictions.py
 examples/
   demo_anonymized_sample.csv
+  demo_predictions.csv
 docs/
   assets/figure3_biopac.jpg
   biopac_workflow.md
   data_availability.md
+  implementation_notes.md
 ```
 
 ## Installation
@@ -110,6 +112,16 @@ python scripts/evaluate_predictions.py path\to\predictions.csv
 
 Glucose values are assumed to be in mmol/L. Clarke error grid classification is
 computed after conversion to mg/dL.
+
+A small synthetic prediction example is provided:
+
+```bash
+python scripts/evaluate_predictions.py examples\demo_predictions.csv
+```
+
+Important implementation differences between the original internal research
+code and this public de-identified package are summarized in
+[`docs/implementation_notes.md`](docs/implementation_notes.md).
 
 ## Data Availability
 
