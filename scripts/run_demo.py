@@ -19,6 +19,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from biopac_tft_oct import (  # noqa: E402
     biopac_process,
     clarke_percentages,
+    detect_first_peak_anchor,
     dej_anchored_features,
     dej_anchored_window_ranges,
     dense_candidate_average,
@@ -34,18 +35,19 @@ def main() -> None:
     if depth_cols:
         oct_signal = df[depth_cols].to_numpy(dtype=float)
     else:
-        oct_signal = synthesize_demo_oct(df["glucose_mmol_l"].to_numpy(dtype=float), n_depth=80)
+        oct_signal = synthesize_demo_oct(df["glucose_mmol_l"].to_numpy(dtype=float), n_depth=120)
 
     result = biopac_process(oct_signal, n_segments=6, max_shift=8, epidermis_depth=8)
     demo_offsets = (8, 18, 28, 38, 48)
+    anchor = detect_first_peak_anchor(result.corrected, site="wrist")
     features, windows = dej_anchored_features(
         result.corrected,
-        dej_index=18,
         offsets=demo_offsets,
         half_width=5,
+        site="wrist",
     )
-    shifted_windows = dej_anchored_window_ranges(
-        dej_index=26,
+    manual_windows = dej_anchored_window_ranges(
+        dej_index=anchor + 8,
         n_depth=result.corrected.shape[1],
         offsets=demo_offsets,
         half_width=5,
@@ -67,8 +69,9 @@ def main() -> None:
 
     print("Bio-PAC demo completed")
     print(f"Corrected OCT shape: {result.corrected.shape}")
+    print(f"Detected wrist first-peak anchor within pixels 27-45: {anchor}")
     print(f"DEJ windows: {windows}")
-    print(f"DEJ windows after moving the DEJ anchor from 18 to 26 pixels: {shifted_windows}")
+    print(f"Manual DEJ override windows using anchor + 8: {manual_windows}")
     print(f"Feature matrix shape: {features.shape}")
     print("Regression metrics:")
     for key, value in metrics.items():

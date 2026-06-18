@@ -62,10 +62,13 @@ Key differences:
    - Original MATLAB code uses fixed center rules and half widths tied to the
      internal 200-pixel depth representation.
    - Public Python code exposes a generic DEJ-anchored function with configurable
-     `dej_index`, `offsets`, and `half_width`. The released function does not
-     perform raw-image DEJ segmentation; after the DEJ pixel is supplied, each
-     window center is automatically shifted as `dej_index + offset`, with the
-     default `half_width=5` matching the manuscript's 11-pixel window definition.
+     `dej_index`, `offsets`, `half_width`, `site`, and `search_range`. By
+     default, it detects the first depth-axis intensity peak after skipping the
+     first 10 pixels and constrains the search to the site-specific DEJ range
+     (`27-45` pixels for arm/wrist and `55-75` pixels for finger). A manually
+     supplied `dej_index` overrides automatic detection. Each window center is
+     shifted as `anchor + offset`, with the default `half_width=5` matching the
+     manuscript's 11-pixel window definition.
 
 ## Differences From the Original Darts Training Pipeline
 

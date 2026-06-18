@@ -82,12 +82,15 @@ The five `slopmean` columns correspond to Bio-PAC-processed dynamic OCT
 depth-window features. Static covariates include age, sex, diabetes status, and
 measurement site.
 
-The DEJ-anchored window code uses the supplied DEJ pixel as the anatomical
-anchor and automatically shifts the five window centers as `dej_index + offset`.
-It does not claim to perform raw-image DEJ segmentation; the DEJ index should be
-provided by anatomical annotation, segmentation, or the study preprocessing
-protocol. The default window half-width is 5 pixels, giving the 11-pixel window
-definition used in the manuscript.
+The DEJ-anchored window code can automatically detect the first depth-axis
+intensity peak after skipping the first 10 pixels and restricting the search to
+the expected site-specific DEJ range. The default pixel ranges are `27-45` for
+arm/wrist skin and `55-75` for finger skin, based on the manuscript Fig. 4 and
+the 5.8574 micrometer/pixel depth spacing. The five window centers are then
+shifted as `anchor + offset`. A manually supplied `dej_index` is still
+supported and takes precedence over automatic detection. The default window
+half-width is 5 pixels, giving the 11-pixel window definition used in the
+manuscript.
 
 ## Bio-PAC Summary
 
