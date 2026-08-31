@@ -212,6 +212,56 @@ def epidermis_referenced_decoupling(
     return corrected, fingerprint, alpha
 
 
+def causal_epidermis_referenced_decoupling(
+    aligned_oct: np.ndarray,
+    epidermis_depth: int = 10,
+    min_history: int = 10,
+    eps: float = 1e-12,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Causal prefix version of epidermis-referenced optical decoupling.
+
+    At acquisition time ``t``, the epidermal fingerprint and depth-wise
+    regression coefficients are estimated only from the available prefix
+    ``aligned_oct[: t + 1]``. No future OCT frame or future glucose value is
+    used. This is the implementation that matches a sequential inference
+    boundary, while :func:`epidermis_referenced_decoupling` remains available
+    for offline batch analysis.
+    """
+
+    x = _as_time_depth(aligned_oct)
+    n_time, n_depth = x.shape
+    epidermis_depth = int(max(1, min(epidermis_depth, n_depth)))
+    min_history = int(max(2, min_history))
+
+    corrected = x.copy()
+    fingerprints = np.zeros(n_time, dtype=float)
+    alpha_over_time = np.zeros((n_time, n_depth), dtype=float)
+
+    for t in range(n_time):
+        prefix = x[: t + 1]
+        raw_fingerprint = np.nanmean(prefix[:, :epidermis_depth], axis=1)
+        std = float(np.nanstd(raw_fingerprint))
+
+        if prefix.shape[0] < min_history or std < eps:
+            continue
+
+        fingerprint = (raw_fingerprint - np.nanmean(raw_fingerprint)) / (std + eps)
+        fingerprints[t] = fingerprint[-1]
+        p_centered = fingerprint - np.mean(fingerprint)
+        denom = float(np.sum(p_centered**2))
+        if denom < eps:
+            continue
+
+        for z in range(n_depth):
+            y = prefix[:, z]
+            y_centered = y - np.nanmean(y)
+            alpha_z = float(np.nansum(p_centered * y_centered) / denom)
+            alpha_over_time[t, z] = alpha_z
+            corrected[t, z] = x[t, z] - alpha_z * fingerprint[-1]
+
+    return corrected, fingerprints, alpha_over_time
+
+
 def biopac_process(
     oct_signal: np.ndarray,
     n_segments: int = 10,
@@ -228,6 +278,41 @@ def biopac_process(
     corrected, fingerprint, alpha = epidermis_referenced_decoupling(
         aligned,
         epidermis_depth=epidermis_depth,
+    )
+    return BioPACResult(
+        aligned=aligned,
+        corrected=corrected,
+        epidermal_fingerprint=fingerprint,
+        depth_coefficients=alpha,
+        shifts=shifts,
+    )
+
+
+def causal_biopac_process(
+    oct_signal: np.ndarray,
+    n_segments: int = 10,
+    max_shift: int = 30,
+    epidermis_depth: int = 10,
+    min_history: int = 10,
+) -> BioPACResult:
+    """Run Bio-PAC under a sequential no-future-OCT boundary.
+
+    Morphology alignment compares each current A-scan with the first available
+    OCT morphology reference. The optical decoupling stage then estimates the
+    epidermal fingerprint and regression coefficient from the available prefix
+    only. This mirrors a workflow in which each new OCT acquisition is
+    preprocessed before being passed to the temporal predictor.
+    """
+
+    aligned, shifts = morphology_align(
+        oct_signal=oct_signal,
+        n_segments=n_segments,
+        max_shift=max_shift,
+    )
+    corrected, fingerprint, alpha = causal_epidermis_referenced_decoupling(
+        aligned,
+        epidermis_depth=epidermis_depth,
+        min_history=min_history,
     )
     return BioPACResult(
         aligned=aligned,

@@ -18,6 +18,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from biopac_tft_oct import (  # noqa: E402
     biopac_process,
+    causal_biopac_process,
     clarke_percentages,
     detect_first_peak_anchor,
     dej_anchored_features,
@@ -38,6 +39,13 @@ def main() -> None:
         oct_signal = synthesize_demo_oct(df["glucose_mmol_l"].to_numpy(dtype=float), n_depth=120)
 
     result = biopac_process(oct_signal, n_segments=6, max_shift=8, epidermis_depth=8)
+    causal_result = causal_biopac_process(
+        oct_signal,
+        n_segments=6,
+        max_shift=8,
+        epidermis_depth=8,
+        min_history=10,
+    )
     demo_offsets = (8, 18, 28, 38, 48)
     anchor = detect_first_peak_anchor(result.corrected, site="wrist")
     features, windows = dej_anchored_features(
@@ -69,6 +77,7 @@ def main() -> None:
 
     print("Bio-PAC demo completed")
     print(f"Corrected OCT shape: {result.corrected.shape}")
+    print(f"Causal corrected OCT shape: {causal_result.corrected.shape}")
     print(f"Detected wrist first-peak anchor within pixels 27-45: {anchor}")
     print(f"DEJ windows: {windows}")
     print(f"Manual DEJ override windows using anchor + 8: {manual_windows}")

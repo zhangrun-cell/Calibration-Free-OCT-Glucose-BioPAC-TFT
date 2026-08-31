@@ -63,6 +63,9 @@ Bio-PAC aligns the depth morphology before optical compensation:
 The warping changes the depth coordinate, not the raw intensity values
 themselves. When one segment is shifted, neighboring intervals are smoothly
 stretched or compressed so that the full depth axis remains continuous.
+This alignment is causal with respect to OCT time: the current A-scan is aligned
+to the initial OCT morphology reference independently, so no future OCT frame is
+needed to align the current frame.
 
 Implementation entry point:
 
@@ -92,9 +95,11 @@ Bio-PAC uses the epidermis as a reference pseudo-signal:
    N_epi(t) = mean_z I_align(t, z), z in superficial epidermal depths
    ```
 
-2. `N_epi(t)` is standardized into a dimensionless reference pattern `P(t)`.
-   In the released implementation this is z-score standardization, meaning zero
-   mean and unit standard deviation, rather than min-max scaling.
+2. In the sequential setting, `N_epi(t)` is formed from the available OCT prefix
+   up to the current acquisition. The prefix fingerprint is standardized into a
+   dimensionless reference pattern `P(t)`. In the released implementation this
+   is z-score standardization, meaning zero mean and unit standard deviation,
+   rather than min-max scaling.
 
 3. For each depth pixel `z`, Bio-PAC fits a one-dimensional regression along the
    time axis:
@@ -118,6 +123,20 @@ Because `alpha_z` is estimated separately for each depth, the same epidermal
 fingerprint can be removed with depth-specific strength. This avoids applying a
 single global subtraction coefficient to all tissue layers.
 
+For a causal no-future-OCT workflow, `alpha_z` at time `t` is estimated from the
+available prefix `I_align(1:t, z)`. The corrected value at the current time is
+therefore:
+
+```text
+I_corr(t, z) = I_align(t, z) - alpha_z^(t) P_t(t)
+```
+
+where `P_t` and `alpha_z^(t)` are computed from frames already acquired by time
+`t`. Future OCT frames and future reference glucose values are not used for this
+calculation. The batch function remains useful for offline inspection of saved
+sessions, but the manuscript inference boundary corresponds to the causal
+prefix function.
+
 Implementation entry point:
 
 ```python
@@ -126,6 +145,20 @@ from biopac_tft_oct.biopac import epidermis_referenced_decoupling
 corrected, fingerprint, alpha = epidermis_referenced_decoupling(
     aligned,
     epidermis_depth=10,
+)
+```
+
+Sequential implementation entry point:
+
+```python
+from biopac_tft_oct.biopac import causal_biopac_process
+
+result = causal_biopac_process(
+    oct_signal,
+    n_segments=10,
+    max_shift=30,
+    epidermis_depth=10,
+    min_history=10,
 )
 ```
 

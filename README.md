@@ -97,7 +97,15 @@ manuscript.
 
 ## Bio-PAC Summary
 
-Bio-PAC processes the depth-time OCT signal `I(t, z)` in two stages:
+Bio-PAC processes the depth-time OCT signal `I(t, z)` before the temporal
+predictor receives OCT covariates. The released code provides both an offline
+batch function for reproducing saved-session analyses and a causal prefix
+function for the sequential inference boundary described in the manuscript.
+The causal path uses only the current and previously acquired OCT frames when
+estimating compensation for a new time point; it does not use future OCT frames
+or future glucose labels.
+
+Bio-PAC contains two stages:
 
 1. **Morphology-aware refractive-distortion alignment** estimates segment-wise
    shifts by cross-correlating whole envelope segments and interpolates them
@@ -107,6 +115,8 @@ Bio-PAC processes the depth-time OCT signal `I(t, z)` in two stages:
    depth-specific fitted component `alpha_z P(t)`.
 
 This implementation follows the formula logic described in the manuscript.
+Use `causal_biopac_process()` when auditing the no-future-OCT prediction path.
+Use `biopac_process()` only for offline batch inspection of a saved OCT session.
 
 The manuscript Figure 3 and a detailed step-by-step explanation of the Bio-PAC
 computational workflow are available in
