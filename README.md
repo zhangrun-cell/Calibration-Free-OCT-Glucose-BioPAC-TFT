@@ -1,8 +1,8 @@
-# Calibration-Free OCT Glucose Monitoring via Bio-PAC and TFT
+# Calibration-Equation-Free OCT-Based Blood Glucose Monitoring via Bio-PAC and TFT
 
 This repository accompanies the manuscript:
 
-**Calibration-Free and Generalizable OCT-Based Non-Invasive Glucose Monitoring via Bio-PAC and Temporal Fusion Transformer**
+**Calibration-Equation-Free OCT-Based Blood Glucose Monitoring with Bio-PAC and Temporal Fusion Transformer**
 
 It is intended as a publication-oriented and peer-review reproducibility package,
 providing the public implementation details needed to understand and verify the
@@ -12,11 +12,13 @@ de-identified method package rather than a full clinical-data release.
 The code implements the core computational components used in the paper:
 
 - Biologically Informed Physical Alignment and Compensation (Bio-PAC)
-- DEJ-anchored dynamic OCT depth-window feature construction
+- DEJ-guided dynamic signal-extraction rule discovery and application
+- five-fold subject-wise prediction protocol with L0 = 10 and W = 50/H = 10
 - distribution-aware autoregressive aggregation
+- Figure 7 input-source and paired-trajectory control utilities
 - Clarke error grid and regression-metric evaluation
 
-The full clinical OCT-glucose dataset is not included because it contains human
+The full clinical OCT-reference-blood-glucose dataset is not included because it contains human
 measurements under institutional ethics and privacy restrictions. A small
 anonymized/synthetic example is included to verify the code path.
 
@@ -25,7 +27,10 @@ anonymized/synthetic example is included to verify the code path.
 ```text
 src/biopac_tft_oct/
   biopac.py          # morphology alignment and epidermis-referenced decoupling
-  features.py        # DEJ-anchored depth-window features
+  features.py        # DEJ-guided dynamic OCT signal extraction
+  rule_discovery.py  # discovery-only DEJ-to-window mappings
+  protocol.py        # L0, W/H, and five-fold subject-wise splits
+  controls.py        # input-source and paired-trajectory control utilities
   aggregation.py     # dense candidate averaging for overlapping predictions
   metrics.py         # Clarke zones and regression metrics
 scripts/
@@ -34,6 +39,8 @@ scripts/
 research_code/
   matlab/            # organized MATLAB code close to the internal Bio-PAC scripts
   python/            # organized subject-wise Darts workflow skeleton
+tests/
+  test_paper_protocol.py  # protocol and control-boundary checks
 examples/
   demo_anonymized_sample.csv
   demo_predictions.csv
@@ -82,18 +89,40 @@ gender, age, diabetic_healthy, diabetic_t1, diabetic_t2, finger, arm
 ```
 
 The five `slopmean` columns correspond to Bio-PAC-processed dynamic OCT
-depth-window features. Static covariates include age, sex, diabetes status, and
-measurement site.
+features. The `glucose` column is the reference blood glucose target. Static
+covariates include age, sex, diabetes status, and measurement site.
 
-The DEJ-anchored window code can automatically detect the first depth-axis
-intensity peak after skipping the first 10 pixels and restricting the search to
-the expected site-specific DEJ range. The default pixel ranges are `27-45` for
-arm/wrist skin and `55-75` for finger skin, based on the manuscript Fig. 4 and
-the 5.8574 micrometer/pixel depth spacing. The five window centers are then
-shifted as `anchor + offset`. A manually supplied `dej_index` is still
-supported and takes precedence over automatic detection. The default window
-half-width is 5 pixels, giving the 11-pixel window definition used in the
-manuscript.
+For the manuscript workflow, the five features are not selected anew in the
+prediction cohort. A separate 28-session, 21-participant rule-discovery cohort
+establishes a frozen, site-specific mapping from OCT-derived DEJ depth to five
+window centres. The mapping is then applied to the 72-session, 41-participant
+prediction cohort from OCT morphology alone. The prediction-cohort reference
+blood glucose trajectory is never used to reselect or adapt the windows.
+
+`detect_first_peak_anchor()` detects the OCT-derived DEJ/first-peak anchor
+after skipping the first 10 pixels and restricting the search to the expected
+site-specific range. `fit_dej_guided_dynamic_signal_extraction_rule()` fits a
+discovery-only mapping, and `dej_guided_dynamic_signal_features()` applies the
+frozen mapping to a new session. The 11-pixel window definition is retained by
+the default `half_width=5`.
+
+## Study Protocol
+
+The full study contains 100 OCT-OGTT sessions from 62 participants. The
+rule-discovery cohort and prediction cohort are distinct. Prediction uses
+five-fold subject-wise cross-validation: every participant is held out for
+testing once, and all sessions from a participant remain within one partition
+in each fold.
+
+Two different historical lengths have different roles:
+
+- `L0 = 10` initial reference blood glucose values initialise the model state.
+- `W = 50` observed time points form the model input history, and `H = 10`
+  is the forecast horizon.
+
+Thus, no forecast is expected during the first 50 time points. This history
+requirement is separate from the 10-point initial reference input. At inference,
+future reference blood glucose is masked and future OCT is unavailable.
 
 ## Bio-PAC Summary
 
@@ -138,14 +167,20 @@ run:
 python scripts/evaluate_predictions.py path\to\predictions.csv
 ```
 
-Glucose values are assumed to be in mmol/L. Clarke error grid classification is
-computed after conversion to mg/dL.
+Reference blood glucose values are assumed to be in mmol/L. Clarke error grid
+classification is computed after conversion to mg/dL.
 
 A small synthetic prediction example is provided:
 
 ```bash
 python scripts/evaluate_predictions.py examples\demo_predictions.csv
 ```
+
+The Figure 7 control helpers are available in `biopac_tft_oct.controls`. The
+paired physiological trajectory stress test deliberately reorders matched
+OCT-reference-blood-glucose pairs within a session while leaving explicit Time
+and static covariates unchanged. It tests reliance on the original OGTT time
+template without claiming to break the OCT-reference-blood-glucose pair itself.
 
 Important implementation differences between the original internal research
 code and this public de-identified package are summarized in

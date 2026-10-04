@@ -1,8 +1,10 @@
-"""DEJ-anchored dynamic OCT feature construction."""
+"""DEJ-guided dynamic OCT signal-extraction utilities."""
 
 from __future__ import annotations
 
 import numpy as np
+
+from .rule_discovery import DEJGuidedDynamicSignalExtractionRule
 
 
 SITE_DEJ_SEARCH_RANGES: dict[str, tuple[int, int]] = {
@@ -189,3 +191,34 @@ def dej_anchored_features(
         cols.append(np.nanmean(x[:, start:stop], axis=1))
 
     return np.column_stack(cols), windows
+
+
+def dej_guided_dynamic_signal_features(
+    corrected_oct: np.ndarray,
+    *,
+    rule: DEJGuidedDynamicSignalExtractionRule,
+    site: str,
+    dej_depth: float | None = None,
+    search_range: tuple[int, int] | None = None,
+) -> tuple[np.ndarray, list[tuple[int, int]], int]:
+    """Extract five OCT features using a frozen DEJ-guided discovery rule.
+
+    The rule must have been fitted in the independent rule-discovery cohort.
+    For a new prediction session, this function determines its DEJ depth from
+    Bio-PAC-corrected OCT morphology when ``dej_depth`` is not supplied, applies
+    the frozen site-specific mapping, and averages the resulting five windows.
+    It neither receives nor uses prediction-cohort reference blood glucose.
+
+    Returns the feature matrix, the applied ranges, and the OCT-derived DEJ
+    depth used for that session.
+    """
+
+    x = np.asarray(corrected_oct, dtype=float)
+    if x.ndim != 2:
+        raise ValueError("corrected_oct must have shape (time, depth).")
+    if dej_depth is None:
+        dej_depth = detect_first_peak_anchor(x, site=site, search_range=search_range)
+    dej_depth_int = int(round(float(dej_depth)))
+    windows = rule.window_ranges(site=site, dej_depth=dej_depth_int, n_depth=x.shape[1])
+    features = np.column_stack([np.nanmean(x[:, start:stop], axis=1) for start, stop in windows])
+    return features, windows, dej_depth_int

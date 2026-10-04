@@ -21,11 +21,12 @@ python/
   workflow: 200-pixel depth crop, Hilbert-envelope morphology alignment,
   segment-wise cross-correlation, PCHIP coordinate warping, epidermis-referenced
   z-score fingerprinting, and depth-wise first-order regression decoupling.
-- `extract_five_depth_windows_original_style.m` organizes the five-window
-  feature extraction step. It supports the manuscript first-peak/DEJ anchor
-  strategy with site-specific search ranges and a manual anchor override.
-- `tft_subjectwise_pipeline_skeleton.py` summarizes the Darts workflow used for
-  subject-wise model comparison without publishing private data folders.
+- `extract_five_depth_windows_original_style.m` organizes the DEJ-guided
+  depth-window extraction step. It supports first-peak anchoring with
+  site-specific search ranges and a manual anchor override.
+- `tft_subjectwise_pipeline_skeleton.py` summarizes the five-fold subject-wise
+  Darts workflow, including the separate L0 = 10 reference history and W = 50/
+  H = 10 model-history settings, without publishing private data folders.
 
 The runnable lightweight implementation used by the public demo remains under
 `src/biopac_tft_oct/` and `scripts/`.

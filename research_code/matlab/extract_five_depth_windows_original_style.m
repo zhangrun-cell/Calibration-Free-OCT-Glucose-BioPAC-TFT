@@ -1,11 +1,15 @@
 function [features, windows, anchorPixel] = extract_five_depth_windows_original_style(CorrectedOCT, site, opts)
 %EXTRACT_FIVE_DEPTH_WINDOWS_ORIGINAL_STYLE Five OCT depth-window features.
 %
-% This organized version supports both the manuscript anchor rule and manual
-% inspection:
+% This organized version supports the manuscript DEJ-guided rule and legacy
+% manual inspection:
 %   - automatic mode: skip the first 10 pixels, then search for the first local
 %     peak inside a site-specific DEJ range;
-%   - manual mode: supply opts.manualAnchorPixel to override automatic search.
+%   - manuscript mode: supply frozen site-specific ruleSlope and ruleIntercept
+%     coefficients fitted in the independent rule-discovery cohort;
+%   - manual mode: supply opts.manualAnchorPixel and optional offsets.
+%
+% Prediction-cohort reference blood glucose is not an input to this function.
 %
 % The output features are temporal curves: each column is the average OCT
 % intensity inside one depth window over time.
@@ -14,7 +18,9 @@ arguments
     CorrectedOCT double
     site string = "wrist"
     opts.manualAnchorPixel double = NaN
-    opts.offsets double = [8, 18, 28, 38, 48]
+    opts.ruleSlope double = []
+    opts.ruleIntercept double = []
+    opts.offsets double = []
     opts.halfWidth double = 5
     opts.searchRange double = []
     opts.smoothWindow double = 5
@@ -48,7 +54,18 @@ else
     anchorPixel = detect_first_peak_after_cutoff(Data, searchRange, opts.smoothWindow);
 end
 
-centers = anchorPixel + opts.offsets(:);
+if ~isempty(opts.ruleSlope) || ~isempty(opts.ruleIntercept)
+    if numel(opts.ruleSlope) ~= 5 || numel(opts.ruleIntercept) ~= 5
+        error('ruleSlope and ruleIntercept must each contain five coefficients.');
+    end
+    centers = round(opts.ruleSlope(:) .* anchorPixel + opts.ruleIntercept(:));
+elseif ~isempty(opts.offsets)
+    % Legacy/manual mode only. Manuscript analyses use the frozen rule above.
+    centers = anchorPixel + opts.offsets(:);
+else
+    error(['Provide frozen ruleSlope/ruleIntercept coefficients from the ', ...
+        'rule-discovery cohort, or explicit legacy offsets for manual inspection.']);
+end
 windows = zeros(numel(centers), 2);
 features = zeros(nTime, numel(centers));
 

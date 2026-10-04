@@ -1,17 +1,17 @@
-"""Subject-wise Darts training pipeline skeleton.
+"""Subject-wise five-fold OCT-conditioned prediction pipeline skeleton.
 
-This file is an organized, de-identified version of the internal training
-workflow. It intentionally does not include private subject CSV files, trained
-weights, or generated figures. It documents the code structure used for the
-paper:
+This organized, de-identified script exposes the study protocol without
+shipping clinical records, fitted model weights, or figure outputs. It makes
+four boundaries explicit:
 
-- discover subject folders;
-- split by subject, never by time point;
-- load glucose, five Bio-PAC OCT features, and static covariates;
-- fit shared Darts models;
-- run overlapping-window prediction and dense candidate averaging.
+1. the 28-session rule-discovery cohort is handled separately from prediction;
+2. the 72-session prediction cohort is split by subject in five folds;
+3. L0 = 10 reference blood glucose samples initialize state but do not define
+   the first forecastable point;
+4. W = 50 and H = 10 define the model history and forecast horizon.
 
-Install optional dependencies before using real data:
+Install optional Darts dependencies before adapting this skeleton to ethically
+approved local data:
 
     pip install -r requirements-optional.txt
 """
@@ -19,12 +19,16 @@ Install optional dependencies before using real data:
 from __future__ import annotations
 
 import argparse
-import random
+import sys
 from pathlib import Path
 from typing import Iterable
 
-import numpy as np
 import pandas as pd
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "src"))
+
+from biopac_tft_oct.protocol import PredictionProtocol, subjectwise_fivefold_splits  # noqa: E402
 
 
 DEFAULT_DYNAMIC_COVARIATES = ["slopmean1", "slopmean2", "slopmean3", "slopmean4", "slopmean5"]
@@ -40,19 +44,14 @@ DEFAULT_STATIC_COVARIATES = [
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Subject-wise OCT glucose model pipeline")
+    parser = argparse.ArgumentParser(description="Subject-wise five-fold OCT blood glucose pipeline")
     parser.add_argument("--data-dir", type=Path, default=Path("research_code/data"))
     parser.add_argument("--subject-pattern", type=str, default="subject-")
     parser.add_argument("--time-col", type=str, default="date")
     parser.add_argument("--target-col", type=str, default="glucose")
     parser.add_argument("--dynamic-covariates", nargs="+", default=DEFAULT_DYNAMIC_COVARIATES)
     parser.add_argument("--static-covariates", nargs="+", default=DEFAULT_STATIC_COVARIATES)
-    parser.add_argument("--train-ratio", type=float, default=0.7)
-    parser.add_argument("--val-ratio", type=float, default=0.2)
-    parser.add_argument("--test-ratio", type=float, default=0.1)
-    parser.add_argument("--input-chunk-length", type=int, default=50)
-    parser.add_argument("--output-chunk-length", type=int, default=10)
-    parser.add_argument("--global-keep-ratio", type=float, default=0.3)
+    parser.add_argument("--fold", type=int, default=None, help="Optional zero-based fold to display.")
     parser.add_argument("--seed", type=int, default=42)
     return parser
 
@@ -68,24 +67,6 @@ def discover_subject_files(data_dir: Path, subject_pattern: str) -> dict[str, li
     return subjects
 
 
-def split_subjects(
-    subjects: dict[str, list[Path]],
-    train_ratio: float,
-    val_ratio: float,
-    test_ratio: float,
-    seed: int,
-) -> tuple[list[str], list[str], list[str]]:
-    names = sorted(subjects)
-    random.Random(seed).shuffle(names)
-    n_total = len(names)
-    n_train = int(round(n_total * train_ratio))
-    n_val = int(round(n_total * val_ratio))
-    n_train = min(n_train, n_total)
-    n_val = min(n_val, n_total - n_train)
-    n_test = min(int(round(n_total * test_ratio)), n_total - n_train - n_val)
-    return names[:n_train], names[n_train : n_train + n_val], names[n_train + n_val : n_train + n_val + n_test]
-
-
 def validate_session_csv(
     csv_path: Path,
     time_col: str,
@@ -93,6 +74,8 @@ def validate_session_csv(
     dynamic_covariates: Iterable[str],
     static_covariates: Iterable[str],
 ) -> pd.DataFrame:
+    """Validate the local, de-identified session format before Darts conversion."""
+
     df = pd.read_csv(csv_path)
     required = [time_col, target_col, *dynamic_covariates, *static_covariates]
     missing = [column for column in required if column not in df.columns]
@@ -103,51 +86,33 @@ def validate_session_csv(
     return df.sort_values(time_col)
 
 
-def dense_candidate_average(values: np.ndarray, keep_ratio: float = 0.3) -> float:
-    """Average the most concentrated subset of overlapping predictions."""
-
-    x = np.asarray(values, dtype=float)
-    x = x[np.isfinite(x)]
-    if x.size == 0:
-        return float("nan")
-    if x.size == 1:
-        return float(x[0])
-    x = np.sort(x)
-    keep = max(1, int(np.ceil(x.size * keep_ratio)))
-    if keep >= x.size:
-        return float(np.mean(x))
-    spans = x[keep - 1 :] - x[: x.size - keep + 1]
-    start = int(np.argmin(spans))
-    return float(np.mean(x[start : start + keep]))
-
-
 def main() -> None:
     args = build_arg_parser().parse_args()
+    protocol = PredictionProtocol()
     subjects = discover_subject_files(args.data_dir, args.subject_pattern)
     if not subjects:
         print(f"No subject CSV files found under {args.data_dir}.")
-        print("This is expected in the public repository because private clinical data are not released.")
-        print("Place de-identified local files under research_code/data/subject-*/ to run the full pipeline.")
+        print("This is expected in the public repository because clinical data are not released.")
+        print("Place de-identified local files under research_code/data/subject-*/ to inspect the folds.")
         return
-    train_subjects, val_subjects, test_subjects = split_subjects(
-        subjects,
-        args.train_ratio,
-        args.val_ratio,
-        args.test_ratio,
-        args.seed,
-    )
-    print("Subject-wise split")
-    print(f"  train: {train_subjects}")
-    print(f"  val:   {val_subjects}")
-    print(f"  test:  {test_subjects}")
+
+    folds = list(subjectwise_fivefold_splits(subjects.keys(), n_splits=protocol.n_subject_folds, seed=args.seed))
+    selected_folds = folds if args.fold is None else [folds[args.fold]]
+    print("Paper protocol")
+    print(f"  subject-wise folds:      {protocol.n_subject_folds}")
+    print(f"  initial reference L0:    {protocol.initial_reference_length}")
+    print(f"  input history W:         {protocol.input_chunk_length}")
+    print(f"  forecast horizon H:      {protocol.output_chunk_length}")
+    print(f"  first forecastable index: {protocol.first_forecastable_index}")
     print()
-    print("Expected Darts model configuration")
-    print(f"  input_chunk_length:  {args.input_chunk_length}")
-    print(f"  output_chunk_length: {args.output_chunk_length}")
-    print(f"  dynamic covariates:  {args.dynamic_covariates}")
-    print(f"  static covariates:   {args.static_covariates}")
+    for fold in selected_folds:
+        print(f"Fold {fold.fold_index + 1}/{protocol.n_subject_folds}")
+        print(f"  train subjects ({len(fold.train_subjects)}): {list(fold.train_subjects)}")
+        print(f"  validation subjects ({len(fold.validation_subjects)}): {list(fold.validation_subjects)}")
+        print(f"  test subjects ({len(fold.test_subjects)}): {list(fold.test_subjects)}")
     print()
-    print("This skeleton omits private training execution because clinical data are not released.")
+    print("Each subject remains in one partition within a fold; sessions are never concatenated.")
+    print("Reference blood glucose beyond L0 is masked at inference, and future OCT is unavailable.")
 
 
 if __name__ == "__main__":

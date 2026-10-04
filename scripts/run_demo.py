@@ -21,9 +21,10 @@ from biopac_tft_oct import (  # noqa: E402
     causal_biopac_process,
     clarke_percentages,
     detect_first_peak_anchor,
-    dej_anchored_features,
-    dej_anchored_window_ranges,
+    dej_guided_dynamic_signal_features,
     dense_candidate_average,
+    fit_dej_guided_dynamic_signal_extraction_rule,
+    PredictionProtocol,
     regression_metrics,
 )
 
@@ -46,19 +47,12 @@ def main() -> None:
         epidermis_depth=8,
         min_history=10,
     )
-    demo_offsets = (8, 18, 28, 38, 48)
     anchor = detect_first_peak_anchor(result.corrected, site="wrist")
-    features, windows = dej_anchored_features(
-        result.corrected,
-        offsets=demo_offsets,
-        half_width=5,
+    rule = synthesize_demo_dej_rule()
+    features, windows, session_dej_depth = dej_guided_dynamic_signal_features(
+        causal_result.corrected,
+        rule=rule,
         site="wrist",
-    )
-    manual_windows = dej_anchored_window_ranges(
-        dej_index=anchor + 8,
-        n_depth=result.corrected.shape[1],
-        offsets=demo_offsets,
-        half_width=5,
     )
 
     # The demo prediction is a simple noisy proxy so that metrics can be tested
@@ -74,20 +68,42 @@ def main() -> None:
 
     metrics = regression_metrics(glucose, smoothed_proxy)
     clarke = clarke_percentages(glucose, smoothed_proxy)
+    protocol = PredictionProtocol()
 
     print("Bio-PAC demo completed")
     print(f"Corrected OCT shape: {result.corrected.shape}")
     print(f"Causal corrected OCT shape: {causal_result.corrected.shape}")
     print(f"Detected wrist first-peak anchor within pixels 27-45: {anchor}")
-    print(f"DEJ windows: {windows}")
-    print(f"Manual DEJ override windows using anchor + 8: {manual_windows}")
+    print(f"Rule-applied session DEJ depth: {session_dej_depth}")
+    print(f"DEJ-guided windows: {windows}")
     print(f"Feature matrix shape: {features.shape}")
+    print(
+        "Protocol: "
+        f"L0={protocol.initial_reference_length}, W={protocol.input_chunk_length}, "
+        f"H={protocol.output_chunk_length}, first forecast index={protocol.first_forecastable_index}"
+    )
     print("Regression metrics:")
     for key, value in metrics.items():
         print(f"  {key}: {value:.4f}")
     print("Clarke percentages:")
     for key, value in clarke.items():
         print(f"  {key}: {value:.4f}")
+
+
+def synthesize_demo_dej_rule():
+    """Create a synthetic discovery table for the public, no-clinical-data demo."""
+
+    rows = []
+    for site, dej_depths in {"wrist": (28, 34, 40), "finger": (56, 62, 68)}.items():
+        for dej_depth in dej_depths:
+            rows.append(
+                {
+                    "site": site,
+                    "dej_depth": dej_depth,
+                    **{f"window_center_{j + 1}": dej_depth + offset for j, offset in enumerate((8, 18, 28, 38, 48))},
+                }
+            )
+    return fit_dej_guided_dynamic_signal_extraction_rule(pd.DataFrame(rows))
 
 
 def synthesize_demo_oct(glucose: np.ndarray, n_depth: int = 80) -> np.ndarray:

@@ -8,9 +8,15 @@ template.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pandas as pd
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+
+from biopac_tft_oct.protocol import PredictionProtocol
 
 
 def expected_columns() -> list[str]:
@@ -40,6 +46,7 @@ def validate_csv(path: Path) -> None:
 
 
 def main() -> None:
+    protocol = PredictionProtocol()
     print(
         "This is a training template. Install u8darts[torch] and adapt the "
         "subject-wise data loading routine for your local ethically approved data."
@@ -48,11 +55,14 @@ def main() -> None:
     for column in expected_columns():
         print(f"  - {column}")
     print("\nPaper configuration summary:")
-    print("  input_chunk_length: 50")
-    print("  output_chunk_length: 10")
+    print(f"  initial_reference_length (L0): {protocol.initial_reference_length}")
+    print(f"  input_chunk_length (W): {protocol.input_chunk_length}")
+    print(f"  output_chunk_length (H): {protocol.output_chunk_length}")
+    print(f"  first forecastable target index: {protocol.first_forecastable_index}")
     print("  static covariates: age, sex, diabetic status, measurement site")
     print("  dynamic OCT covariates: slopmean1--slopmean5")
-    print("  split: subject-wise, never by sampling point")
+    print("  split: five-fold subject-wise cross-validation, never by sampling point")
+    print("  inference: future reference blood glucose masked; future OCT unavailable")
 
 
 if __name__ == "__main__":

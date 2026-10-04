@@ -2,14 +2,16 @@
 
 This repository is a public, de-identified reproducibility package. It is meant
 to explain the computational logic of the manuscript and to provide runnable
-examples without releasing private clinical OCT-glucose data.
+examples without releasing private clinical OCT-reference-blood-glucose data.
 
 ## What This Repository Reproduces
 
 - Bio-PAC morphology-aware depth alignment.
 - Epidermis-referenced optical decoupling using a standardized epidermal
   fingerprint and depth-wise linear regression.
-- DEJ-anchored five-window dynamic OCT feature construction.
+- DEJ-guided dynamic signal-extraction rule discovery and application.
+- Five-fold subject-wise cross-validation with L0 = 10 and W = 50/H = 10.
+- Input-source and paired-physiological-trajectory control utilities.
 - Distribution-aware candidate averaging for overlapping predictions.
 - Regression metrics and Clarke error-grid zone percentages.
 - Organized MATLAB/Python research scripts that preserve the internal algorithm
@@ -61,17 +63,14 @@ Key differences:
    - This is the closest one-to-one part between the internal and public
      implementations.
 
-5. **Five-window feature construction**
-   - Original MATLAB code uses fixed center rules and half widths tied to the
-     internal 200-pixel depth representation.
-   - Public Python code exposes a generic DEJ-anchored function with configurable
-     `dej_index`, `offsets`, `half_width`, `site`, and `search_range`. By
-     default, it detects the first depth-axis intensity peak after skipping the
-     first 10 pixels and constrains the search to the site-specific DEJ range
-     (`27-45` pixels for arm/wrist and `55-75` pixels for finger). A manually
-     supplied `dej_index` overrides automatic detection. Each window center is
-     shifted as `anchor + offset`, with the default `half_width=5` matching the
-     manuscript's 11-pixel window definition.
+5. **DEJ-guided dynamic signal extraction**
+   - Original MATLAB code uses internal centre rules and half widths tied to the
+     200-pixel depth representation.
+   - The public Python code makes the manuscript boundary explicit: a
+     discovery-only cohort fits five site-specific linear DEJ-to-window
+     mappings; prediction sessions use their OCT-derived DEJ depth and the
+     frozen mapping alone. The default `half_width=5` retains the manuscript's
+     11-pixel window definition.
 
 ## Differences From the Original Darts Training Pipeline
 
@@ -83,7 +82,7 @@ The public repository provides:
 
 - the expected clinical CSV column format,
 - a Darts training template,
-- an organized subject-wise Darts pipeline skeleton in `research_code/python/`,
+- an organized five-fold subject-wise Darts pipeline skeleton in `research_code/python/`,
 - optional dependencies for Darts/XGBoost,
 - evaluation utilities for prediction CSV files.
 
@@ -100,10 +99,11 @@ to the internal research scripts than the compact public demo:
   segment-wise cross-correlation, PCHIP warping, epidermal z-score fingerprint,
   and depth-wise regression subtraction.
 - `research_code/matlab/extract_five_depth_windows_original_style.m` organizes
-  the five-window extraction step with automatic site-constrained first-peak
+  the depth-window extraction step with automatic site-constrained first-peak
   anchoring and manual anchor override.
 - `research_code/python/tft_subjectwise_pipeline_skeleton.py` documents the
-  subject-wise Darts workflow without including private subject folders.
+  five-fold subject-wise Darts workflow, including the distinct L0 and W/H
+  roles, without including private subject folders.
 
 ## Reviewer-Facing Interpretation
 
@@ -116,7 +116,7 @@ pipeline.
 Recommended wording:
 
 > Code for Bio-PAC preprocessing, feature construction, prediction aggregation,
-> and evaluation is publicly available. The clinical OCT-glucose data are not
+> and evaluation is publicly available. The clinical OCT-reference-blood-glucose data are not
 > publicly released because of institutional ethics and privacy restrictions.
 
 ## Usage Notes

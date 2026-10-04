@@ -222,7 +222,8 @@ def causal_epidermis_referenced_decoupling(
 
     At acquisition time ``t``, the epidermal fingerprint and depth-wise
     regression coefficients are estimated only from the available prefix
-    ``aligned_oct[: t + 1]``. No future OCT frame or future glucose value is
+    ``aligned_oct[: t + 1]``. No future OCT frame or future reference blood
+    glucose value is
     used. This is the implementation that matches a sequential inference
     boundary, while :func:`epidermis_referenced_decoupling` remains available
     for offline batch analysis.

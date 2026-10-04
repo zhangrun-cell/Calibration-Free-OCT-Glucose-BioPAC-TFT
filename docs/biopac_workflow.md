@@ -2,7 +2,7 @@
 
 This document explains the Bio-PAC preprocessing logic used in the manuscript
 figure below. The goal is to make the signal path readable without exposing the
-private clinical OCT-glucose dataset.
+private clinical OCT-reference-blood-glucose dataset.
 
 ![Figure 3. Bio-PAC implementation path](assets/figure3_biopac.jpg)
 
@@ -162,69 +162,55 @@ result = causal_biopac_process(
 )
 ```
 
-## Step 4: DEJ-Anchored Dynamic OCT Features
+## Step 4: DEJ-Guided Dynamic Signal-Extraction Rule
 
-After Bio-PAC correction, the corrected depth-time signal is summarized into
-five depth windows anchored around the dermal-epidermal junction (DEJ). These
-windows are used as dynamic OCT covariates for the temporal model.
+After Bio-PAC correction, the depth-time OCT signal is summarized into five
+dynamic OCT features using a DEJ-guided signal-extraction rule. This rule is
+defined in a separate 28-session, 21-participant rule-discovery cohort, not
+selected from the prediction cohort. Reference blood glucose trajectories are
+used only during that discovery analysis to establish fixed, site-specific
+relationships between OCT-derived DEJ depth and the five window centres.
 
-The public code supports two anchor modes. By default, it automatically detects
-the first depth-axis intensity peak after skipping the first 10 pixels. To
-avoid selecting an unrelated structural peak, the search is restricted to the
-expected site-specific DEJ range. The default pixel ranges are:
+For every prediction session, the first depth-axis intensity peak is determined
+from OCT morphology after skipping the first 10 pixels. To avoid selecting an
+unrelated structural peak, the search is restricted to the expected
+site-specific DEJ range:
 
 ```text
 arm/wrist: 27-45 pixels
 finger:    55-75 pixels
 ```
 
-These ranges are based on the manuscript Fig. 4 and the 5.8574 micrometer/pixel
-depth spacing. A manually supplied `dej_index` is also supported and takes
-precedence over automatic detection. Once the automatic or manual anchor is
-available, the five windows are repositioned by relative offsets:
+The prediction-session DEJ depth is then inserted into the frozen mapping for
+its measurement site:
 
 ```text
-c_j = anchor + offset_j
+c_j,m = round(a_j,m * T_m + b_j,m),  j = 1, ..., 5
 W_j = [c_j - 5, c_j + 5]
 ```
 
-Thus, when the DEJ is deeper or shallower in a subject or measurement site, all
-five window locations move with the DEJ anchor rather than staying at fixed
-surface-based pixel indices.
+Here, `T_m` is the OCT-derived DEJ depth for site `m`; `(a_j,m, b_j,m)` are
+locked discovery-cohort coefficients. Thus, the five centres move with tissue
+morphology while reference blood glucose in the prediction cohort is neither
+used for window selection nor for adaptation.
 
 Implementation entry point:
 
 ```python
-from biopac_tft_oct.features import dej_anchored_features, dej_anchored_window_ranges
+from biopac_tft_oct.features import dej_guided_dynamic_signal_features
+from biopac_tft_oct.rule_discovery import fit_dej_guided_dynamic_signal_extraction_rule
 
-features, windows = dej_anchored_features(
-    corrected,
-    site="wrist",
-    offsets=(20, 40, 60, 80, 100),
-    half_width=5,
+rule = fit_dej_guided_dynamic_signal_extraction_rule(discovery_table)
+features, windows, dej_depth = dej_guided_dynamic_signal_features(
+    corrected_oct=corrected,
+    rule=rule,
+    site="arm",
 )
 ```
 
-Manual override remains available when the DEJ/first-peak anchor has been
-determined outside this function:
-
-```python
-features, windows = dej_anchored_features(
-    corrected,
-    dej_index=32,
-    offsets=(20, 40, 60, 80, 100),
-    half_width=5,
-)
-```
-
-For example, with the same offsets and an 11-pixel window width:
-
-```python
-dej_anchored_window_ranges(dej_index=18, n_depth=160)
-dej_anchored_window_ranges(dej_index=26, n_depth=160)
-```
-
-the second call shifts all five depth windows eight pixels deeper.
+The discovery table contains one row per discovery session, with `site`,
+`dej_depth`, and five `window_center_1` to `window_center_5` columns. It is
+not constructed from the prediction cohort.
 
 The resulting feature matrix has shape:
 
@@ -235,11 +221,14 @@ The resulting feature matrix has shape:
 ## Step 5: TFT-Based Conditional Prediction
 
 The Bio-PAC-derived dynamic OCT features are combined with static subject
-information, such as age, sex, diabetes status, and measurement site. A short
-initial glucose reference history is used only to initialize the temporal state;
-it does not fit a subject-specific OCT regression equation.
+information, such as age, sex, diabetes status, and measurement site. The
+DEJ-guided rule therefore links physically stabilized OCT profiles to a common
+set of features before TFT prediction. A short `L0 = 10` initial reference blood
+glucose history is used only to initialize the temporal state; it does not fit a
+subject-specific OCT regression equation. It is distinct from the model history
+`W = 50`, which determines why forecasts begin only after 50 observed points.
 
-This distinction is central to the calibration-free setting:
+This distinction is central to the calibration-equation-free setting:
 
 - Traditional calibration fits an individual model or regression equation for
   each subject.
