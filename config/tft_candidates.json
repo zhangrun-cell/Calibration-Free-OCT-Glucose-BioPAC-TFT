@@ -1,0 +1,58 @@
+{
+  "TFT": [
+    {
+      "name": "legacy-minmax",
+      "epochs": 20,
+      "learning_rate": 0.001,
+      "tft_hidden_size": 16,
+      "scheduler_patience": 5,
+      "reference_padding": "scaled-zero",
+      "target_scaling": "minmax"
+    },
+    {
+      "name": "standard-zero-mask",
+      "epochs": 30,
+      "learning_rate": 0.001,
+      "tft_hidden_size": 32,
+      "scheduler_patience": 5,
+      "reference_padding": "scaled-zero",
+      "target_scaling": "standard"
+    },
+    {
+      "name": "longer-training-h32",
+      "epochs": 100,
+      "learning_rate": 0.001,
+      "tft_hidden_size": 32,
+      "batch_size": 32,
+      "dropout": 0.1,
+      "gradient_clip": 0.0,
+      "scheduler_patience": 5,
+      "reference_padding": "scaled-zero",
+      "target_scaling": "standard"
+    },
+    {
+      "name": "lower-lr-h32",
+      "epochs": 100,
+      "learning_rate": 0.0003,
+      "tft_hidden_size": 32,
+      "batch_size": 32,
+      "dropout": 0.1,
+      "gradient_clip": 0.0,
+      "scheduler_patience": 5,
+      "reference_padding": "scaled-zero",
+      "target_scaling": "standard"
+    },
+    {
+      "name": "larger-capacity-h64",
+      "epochs": 100,
+      "learning_rate": 0.0003,
+      "tft_hidden_size": 64,
+      "batch_size": 32,
+      "dropout": 0.1,
+      "gradient_clip": 0.0,
+      "scheduler_patience": 5,
+      "reference_padding": "scaled-zero",
+      "target_scaling": "standard"
+    }
+  ]
+}

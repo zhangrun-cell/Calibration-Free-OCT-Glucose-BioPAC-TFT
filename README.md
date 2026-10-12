@@ -1,205 +1,142 @@
-# Calibration-Equation-Free OCT-Based Blood Glucose Monitoring via Bio-PAC and TFT
+# Calibration-equation-free OCT-based blood glucose monitoring
 
-This repository accompanies the manuscript:
+Manuscript-aligned source for Bio-PAC, the DEJ-guided dynamic signal-extraction
+rule, and Temporal Fusion Transformer (TFT) prediction. The recommended runner
+is now executable, not only a Darts template. Only TFT is trained by this entry
+point. Clinical data, weights and generated results are not part of the source release.
 
-**Calibration-Equation-Free OCT-Based Blood Glucose Monitoring with Bio-PAC and Temporal Fusion Transformer**
+## Fixed Prediction Protocol
 
-It is intended as a publication-oriented and peer-review reproducibility package,
-providing the public implementation details needed to understand and verify the
-main computational workflow reported in the paper. The repository is a
-de-identified method package rather than a full clinical-data release.
+- L0 = 10 reference blood glucose points initialize the target history.
+- W = 50 input points; H = 10 forecast points. The first 50 rows have no prediction.
+- Five-fold participant-grouped evaluation: each participant is held out once,
+  with every session of that participant kept together.
+- OCT is an observed past covariate, never a known future input.
+- Overlapping horizon candidates are aggregated using the most concentrated 30%.
+- Hyperparameters are selected on validation participants, not the outer test set.
+- No participant-specific optical calibration equation or fitted delay is used.
 
-The code implements the core computational components used in the paper:
+The study has two separate roles: discovery (28 sessions / 21 participants) and
+prediction (72 sessions / 41 participants). Only prediction sessions enter TFT.
+A cohort manifest can verify the separation and the full 100-session / 62-participant
+allocation. The runner does not infer discovery membership from the prediction CSVs.
 
-- Biologically Informed Physical Alignment and Compensation (Bio-PAC)
-- DEJ-guided dynamic signal-extraction rule discovery and application
-- five-fold subject-wise prediction protocol with L0 = 10 and W = 50/H = 10
-- distribution-aware autoregressive aggregation
-- Figure 7 input-source and paired-trajectory control utilities
-- Clarke error grid and regression-metric evaluation
+## Install
 
-The full clinical OCT-reference-blood-glucose dataset is not included because it contains human
-measurements under institutional ethics and privacy restrictions. A small
-anonymized/synthetic example is included to verify the code path.
-
-## Repository Structure
-
-```text
-src/biopac_tft_oct/
-  biopac.py          # morphology alignment and epidermis-referenced decoupling
-  features.py        # DEJ-guided dynamic OCT signal extraction
-  rule_discovery.py  # discovery-only DEJ-to-window mappings
-  protocol.py        # L0, W/H, and five-fold subject-wise splits
-  controls.py        # input-source and paired-trajectory control utilities
-  aggregation.py     # dense candidate averaging for overlapping predictions
-  metrics.py         # Clarke zones and regression metrics
-scripts/
-  run_demo.py        # runnable demo using anonymized/synthetic data
-  evaluate_predictions.py
-research_code/
-  matlab/            # organized MATLAB code close to the internal Bio-PAC scripts
-  python/            # organized subject-wise Darts workflow skeleton
-tests/
-  test_paper_protocol.py  # protocol and control-boundary checks
-examples/
-  demo_anonymized_sample.csv
-  demo_predictions.csv
-docs/
-  assets/figure3_biopac.jpg
-  biopac_workflow.md
-  data_availability.md
-  implementation_notes.md
-```
-
-## Installation
+Use Python 3.12. For optical utilities and lightweight tests:
 
 ```bash
-python -m venv .venv
-.venv\Scripts\activate
 pip install -r requirements.txt
+python -m unittest discover -s tests -v
 ```
 
-The core Bio-PAC and evaluation demo requires only NumPy, pandas, and
-matplotlib. Darts, PyTorch, and XGBoost are optional dependencies for full model
-training and comparison workflows.
-
-Optional training dependencies can be installed with:
+For TFT training:
 
 ```bash
-pip install -r requirements-optional.txt
+pip install -r requirements-training.txt
 ```
 
-## Quick Demo
+Darts 0.39.0 and Torch 2.9.1 are pinned. Install the appropriate CPU/CUDA Torch
+build for your hardware. Training is local; it does not submit data to a service.
+
+## Check and Train
+
+One private CSV per session, grouped under `subject-*/`. See
+[DATA_FORMAT.md](DATA_FORMAT.md) for columns, identities and the locked-mask format.
 
 ```bash
-python scripts/run_demo.py
+python run_tft.py --mode check --data-dir ../private_data --output-dir ../checks/new_check --accelerator cpu
+python run_tft.py --mode train --data-dir ../private_data --output-dir ../runs/new_tft --accelerator gpu
+python run_tft.py --mode audit --data-dir ../private_data --output-dir ../runs/new_tft
 ```
 
-Expected output includes the corrected OCT matrix shape, DEJ window ranges,
-feature matrix shape, regression metrics, and Clarke zone percentages.
+The training command evaluates the candidates in `config/tft_candidates.json`
+within each outer fold, then tests its validation-selected winner once.
+Use a new output directory; source CSVs are never overwritten.
 
-## Data Format
+For an author-verified cohort manifest or a previously locked evaluation mask,
+use the underlying runner:
 
-For the clinical workflow, each session is represented as a minute-level time
-series with columns similar to:
+```bash
+python scripts/run_paper_darts.py --data-dir ../private_data --output-dir ../runs/fixed_config --cohort-manifest ../cohorts.csv --require-paper-counts --evaluation-mask ../locked_mask.csv --accelerator gpu
+```
+
+This command trains the fixed configuration once per fold. It does not search
+test metrics for a configuration that matches a reported number.
+
+## Bio-PAC and DEJ Extraction
+
+`scripts/fit_dej_rule.py` fits and freezes the site-specific mapping from an
+independent discovery analysis table and verifies the cohort manifest.
+
+`scripts/extract_features.py` processes already surface-aligned, laterally
+averaged OCT profiles using causal Bio-PAC and per-acquisition morphology peaks.
+The five windows use the frozen mapping, are 11 pixels wide, and never receive
+prediction-cohort reference blood glucose as an extraction input.
+
+Device-specific raw-volume parsing/surface detection, clinical discovery
+coefficients and restricted source data are not fabricated or embedded here.
+Precomputed five-channel CSVs alone cannot verify their upstream causal provenance.
+
+## Controls and Evaluation
+
+Input-source, zero-reference, Time-only shift, and paired physiological-trajectory
+stress controls are explicit options/helpers. Paired stress reorders OCT and its
+reference together while Time stays fixed; it is not an OCT-reference disruption.
+See [docs/paper_protocol.md](docs/paper_protocol.md) for exact semantics and boundaries.
+
+Reports are generated only in the chosen output folder: predictions, fold/session/
+participant summaries, Clarke zones, participant-cluster bootstrap and fixed global
+offset sensitivity. The valid denominator is measured, never forced to the
+historical manuscript value of 5567.
+
+Evaluate stress controls using the same validation-selected full-input models:
+
+```bash
+python scripts/run_tft_controls.py --run-dir ../runs/new_tft --data-dir ../private_data --output-dir ../runs/new_controls --accelerator gpu
+```
+
+Input-source controls require separately trained models, using the underlying
+runner's `--input-source` option. Zero-ref Time combines `time_only` with
+`--zero-reference`. Main protocol lengths remain fixed in these TFT utilities;
+they do not claim to rerun the separate historical four-model/control analyses.
+
+## Clean Source Package
+
+```bash
+python scripts/build_clean_source.py --output ../OCT_TFT_source_only.zip
+```
+
+An explicit allowlist excludes data, clinical/plot predictions, checkpoints,
+logs, caches, synthetic CSV fixtures and earlier research scripts. Original
+private files and earlier packages are not modified or deleted.
+
+## Source Layout
 
 ```text
-date, glucose, slopmean1, slopmean2, slopmean3, slopmean4, slopmean5,
-gender, age, diabetic_healthy, diabetic_t1, diabetic_t2, finger, arm
+run_tft.py                      check / train / audit
+config/tft_candidates.json      validation-only TFT search space
+scripts/run_paper_darts.py      fixed-protocol TFT runner
+scripts/tune_subjectwise_fivefold.py
+scripts/fit_dej_rule.py
+scripts/extract_features.py
+scripts/run_tft_controls.py     stress tests using saved full-input models
+src/biopac_tft_oct/             optical, extraction, protocol and metric functions
+tests/                         executable protocol and causality checks
+docs/paper_protocol.md          manuscript-to-code contract
 ```
 
-The five `slopmean` columns correspond to Bio-PAC-processed dynamic OCT
-features. The `glucose` column is the reference blood glucose target. Static
-covariates include age, sex, diabetes status, and measurement site.
+Earlier `research_code/` and demo/template scripts remain for reference but are
+not called by the recommended runner. Existing example CSVs are synthetic demo
+fixtures, not clinical results. A source-only ZIP excludes these fixtures and all
+run outputs.
 
-For the manuscript workflow, the five features are not selected anew in the
-prediction cohort. A separate 28-session, 21-participant rule-discovery cohort
-establishes a frozen, site-specific mapping from OCT-derived DEJ depth to five
-window centres. The mapping is then applied to the 72-session, 41-participant
-prediction cohort from OCT morphology alone. The prediction-cohort reference
-blood glucose trajectory is never used to reselect or adapt the windows.
+## Data and Reproduction
 
-`detect_first_peak_anchor()` detects the OCT-derived DEJ/first-peak anchor
-after skipping the first 10 pixels and restricting the search to the expected
-site-specific range. `fit_dej_guided_dynamic_signal_extraction_rule()` fits a
-discovery-only mapping, and `dej_guided_dynamic_signal_features()` applies the
-frozen mapping to a new session. The 11-pixel window definition is retained by
-the default `half_width=5`.
+Clinical health information is restricted by ethics/privacy requirements.
+See [docs/data_availability.md](docs/data_availability.md).
+Passing software tests verifies the implemented logic; it does not establish that
+clinical RMSE or the published denominator has been reproduced. Exact numerical
+reproduction requires the actual frozen inputs, identities, coefficients and mask.
 
-## Study Protocol
-
-The full study contains 100 OCT-OGTT sessions from 62 participants. The
-rule-discovery cohort and prediction cohort are distinct. Prediction uses
-five-fold subject-wise cross-validation: every participant is held out for
-testing once, and all sessions from a participant remain within one partition
-in each fold.
-
-Two different historical lengths have different roles:
-
-- `L0 = 10` initial reference blood glucose values initialise the model state.
-- `W = 50` observed time points form the model input history, and `H = 10`
-  is the forecast horizon.
-
-Thus, no forecast is expected during the first 50 time points. This history
-requirement is separate from the 10-point initial reference input. At inference,
-future reference blood glucose is masked and future OCT is unavailable.
-
-## Bio-PAC Summary
-
-Bio-PAC processes the depth-time OCT signal `I(t, z)` before the temporal
-predictor receives OCT covariates. The released code provides both an offline
-batch function for reproducing saved-session analyses and a causal prefix
-function for the sequential inference boundary described in the manuscript.
-The causal path uses only the current and previously acquired OCT frames when
-estimating compensation for a new time point; it does not use future OCT frames
-or future glucose labels.
-
-Bio-PAC contains two stages:
-
-1. **Morphology-aware refractive-distortion alignment** estimates segment-wise
-   shifts by cross-correlating whole envelope segments and interpolates them
-   into a continuous depth-warping field.
-2. **Epidermis-referenced optical decoupling** averages superficial depth
-   pixels into a standardized epidermal fingerprint `P(t)` and removes the
-   depth-specific fitted component `alpha_z P(t)`.
-
-This implementation follows the formula logic described in the manuscript.
-Use `causal_biopac_process()` when auditing the no-future-OCT prediction path.
-Use `biopac_process()` only for offline batch inspection of a saved OCT session.
-
-The manuscript Figure 3 and a detailed step-by-step explanation of the Bio-PAC
-computational workflow are available in
-[`docs/biopac_workflow.md`](docs/biopac_workflow.md).
-
-![Figure 3. Bio-PAC implementation path](docs/assets/figure3_biopac.jpg)
-
-## Evaluation
-
-For prediction CSV files with columns
-
-```text
-actual_glucose,tft_global_pred,transformer_global_pred,xgboost_global_pred,tide_global_pred
-```
-
-run:
-
-```bash
-python scripts/evaluate_predictions.py path\to\predictions.csv
-```
-
-Reference blood glucose values are assumed to be in mmol/L. Clarke error grid
-classification is computed after conversion to mg/dL.
-
-A small synthetic prediction example is provided:
-
-```bash
-python scripts/evaluate_predictions.py examples\demo_predictions.csv
-```
-
-The Figure 7 control helpers are available in `biopac_tft_oct.controls`. The
-paired physiological trajectory stress test deliberately reorders matched
-OCT-reference-blood-glucose pairs within a session while leaving explicit Time
-and static covariates unchanged. It tests reliance on the original OGTT time
-template without claiming to break the OCT-reference-blood-glucose pair itself.
-
-Important implementation differences between the original internal research
-code and this public de-identified package are summarized in
-[`docs/implementation_notes.md`](docs/implementation_notes.md).
-
-Organized versions of the original research scripts are provided in
-[`research_code/`](research_code/). These files preserve the main internal
-algorithmic steps while removing clinical data, absolute paths, generated
-outputs, and cache files.
-
-## Data Availability
-
-The clinical OCT-glucose data are not publicly released because of institutional
-ethics and privacy restrictions. See `docs/data_availability.md`.
-
-## Citation
-
-If you use this code, please cite the associated manuscript once available.
-
-## License
-
-This project is released under the MIT License.
+Released under the repository's existing MIT License.

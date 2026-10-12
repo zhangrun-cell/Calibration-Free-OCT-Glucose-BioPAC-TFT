@@ -1,137 +1,46 @@
-# Implementation Notes and Differences From the Original Research Code
+# Implementation Notes
 
-This repository is a public, de-identified reproducibility package. It is meant
-to explain the computational logic of the manuscript and to provide runnable
-examples without releasing private clinical OCT-reference-blood-glucose data.
+The recommended executable workflow is `run_tft.py`, not the older
+`research_code/python/tft_subjectwise_pipeline_skeleton.py` or training template.
 
-## What This Repository Reproduces
+## Current implementation
 
-- Bio-PAC morphology-aware depth alignment.
-- Epidermis-referenced optical decoupling using a standardized epidermal
-  fingerprint and depth-wise linear regression.
-- DEJ-guided dynamic signal-extraction rule discovery and application.
-- Five-fold subject-wise cross-validation with L0 = 10 and W = 50/H = 10.
-- Input-source and paired-physiological-trajectory control utilities.
-- Distribution-aware candidate averaging for overlapping predictions.
-- Regression metrics and Clarke error-grid zone percentages.
-- Organized MATLAB/Python research scripts that preserve the internal algorithm
-  structure without releasing private data.
-- A small synthetic/anonymized demo that verifies the public code path.
+- Bio-PAC uses a Hilbert structural envelope, segment-wise correlation, PCHIP
+  displacement interpolation and intensity-coordinate resampling.
+- Sequential compensation estimates epidermal standardization and regression
+  coefficients using only each acquired prefix. The offline batch function is
+  retained for inspection and is not the online inference path.
+- `pipeline.sequential_signal_features` detects epidermal/DEJ peaks per
+  acquisition and applies the frozen site-specific mapping to five 11-pixel
+  windows. Whole-session average anchors and illustrative fixed-offset windows
+  in earlier demo helpers are not used by this sequential entry point.
+- The predictor consumes five precomputed channels as observed past covariates.
+  Their prospective preprocessing provenance must be checked upstream.
+- TFT runs five outer participant folds; validation-only selection, training-only
+  scaling, ten-reference masking, fifty-point context, ten-point horizon,
+  autoregressive feedback and concentrated-candidate aggregation are executable.
+- Time perturbation retains the supplied explicit Time channel rather than
+  silently regenerating its original values.
+- Paired trajectory stress preserves OCT/reference pairing and leaves Time and
+  static covariates unchanged.
 
-## What This Repository Does Not Reproduce
+The full manuscript-to-code contract is in
+[paper_protocol.md](paper_protocol.md).
 
-- It does not include the raw clinical OCT volumes.
-- It does not include the subject-level clinical CSV files used for manuscript
-  training and evaluation.
-- It does not include trained model weights.
-- It does not rerun the full four-model training experiment that generated the
-  reported manuscript tables and figures.
+## Intentionally separate inputs
 
-These omissions are intentional because the original dataset contains human
-measurements and is restricted by institutional ethics and privacy constraints.
+No raw clinical OCT volumes, private participant tables, fitted clinical DEJ
+coefficients, evaluation mask or trained checkpoints are embedded in this source
+release. Volume cropping, boundary detection and surface flattening are
+device-specific upstream operations. The DEJ fitting entry point consumes the
+supervised discovery peak table rather than claiming to recreate its original
+peak-identification analysis from five-channel prediction CSVs.
 
-## Differences From the Original Bio-PAC MATLAB Code
+The supplied Darts source informed the runner and parameter candidates; recovered
+plot predictions are not substituted for newly generated forecasts. No code
+forces the number of evaluated points or tunes against archived manuscript RMSE.
 
-The original internal Bio-PAC preprocessing was implemented in MATLAB. The
-public Python implementation follows the same algorithmic structure but is a
-clean-room, lightweight version for reproducibility and review.
-
-Key differences:
-
-1. **Input format**
-   - Original code starts from internal OCT files and MATLAB variables such as
-     `OCTSignal`.
-   - Public code starts from a two-dimensional `oct_signal[t, z]` array after
-     volume preprocessing.
-
-2. **Structural envelope**
-   - Original MATLAB code uses `abs(hilbert(scan))` followed by Gaussian
-     smoothing.
-   - Public Python code now follows the same logic using a NumPy FFT
-     implementation of the Hilbert analytic envelope and Gaussian smoothing, so
-     SciPy is not required for the demo.
-
-3. **Warping-field interpolation**
-   - Original MATLAB code uses segment shifts and `pchip` interpolation.
-   - Public Python code uses NumPy linear interpolation to keep dependencies
-     minimal.
-
-4. **Optical decoupling**
-   - Both versions average the epidermis-dominated superficial depths to obtain
-     `N_epi(t)`, standardize it into `P(t)`, fit a depth-wise first-order
-     regression, and subtract `alpha_z P(t)`.
-   - This is the closest one-to-one part between the internal and public
-     implementations.
-
-5. **DEJ-guided dynamic signal extraction**
-   - Original MATLAB code uses internal centre rules and half widths tied to the
-     200-pixel depth representation.
-   - The public Python code makes the manuscript boundary explicit: a
-     discovery-only cohort fits five site-specific linear DEJ-to-window
-     mappings; prediction sessions use their OCT-derived DEJ depth and the
-     frozen mapping alone. The default `half_width=5` retains the manuscript's
-     11-pixel window definition.
-
-## Differences From the Original Darts Training Pipeline
-
-The original internal training code is a full Darts workflow with private
-subject folders, subject-wise splitting, four models, long-horizon overlapping
-prediction, prediction export, and plotting scripts.
-
-The public repository provides:
-
-- the expected clinical CSV column format,
-- a Darts training template,
-- an organized five-fold subject-wise Darts pipeline skeleton in `research_code/python/`,
-- optional dependencies for Darts/XGBoost,
-- evaluation utilities for prediction CSV files.
-
-This is sufficient to explain the modeling design, but it is not a full
-clinical-result reproduction package.
-
-## Organized Original-Style Code
-
-The `research_code/` folder contains cleaned code that is intentionally closer
-to the internal research scripts than the compact public demo:
-
-- `research_code/matlab/biopac_preprocess_original_style.m` keeps the original
-  MATLAB Bio-PAC sequence: 200-pixel crop, Hilbert envelope, Gaussian smoothing,
-  segment-wise cross-correlation, PCHIP warping, epidermal z-score fingerprint,
-  and depth-wise regression subtraction.
-- `research_code/matlab/extract_five_depth_windows_original_style.m` organizes
-  the depth-window extraction step with automatic site-constrained first-peak
-  anchoring and manual anchor override.
-- `research_code/python/tft_subjectwise_pipeline_skeleton.py` documents the
-  five-fold subject-wise Darts workflow, including the distinct L0 and W/H
-  roles, without including private subject folders.
-
-## Reviewer-Facing Interpretation
-
-A reviewer can use this repository to understand how Bio-PAC works and to verify
-that the public implementation runs. However, the repository should be described
-as a **minimal reproducibility and method-interpretation package**, not as a
-complete release of the clinical study dataset or the full experimental
-pipeline.
-
-Recommended wording:
-
-> Code for Bio-PAC preprocessing, feature construction, prediction aggregation,
-> and evaluation is publicly available. The clinical OCT-reference-blood-glucose data are not
-> publicly released because of institutional ethics and privacy restrictions.
-
-## Usage Notes
-
-Run the Bio-PAC demo:
-
-```bash
-python scripts/run_demo.py
-```
-
-Run the prediction-metric demo:
-
-```bash
-python scripts/evaluate_predictions.py examples/demo_predictions.csv
-```
-
-For private clinical use, keep raw OCT volumes, subject folders, model weights,
-and intermediate predictions outside the public repository.
+Older MATLAB examples, Python skeletons, demos and templates are kept for
+historical reference and are not the recommended reproduction entry points.
+They may use offline processing or illustrative parameters. Do not use their
+output as evidence that the sequential clinical inference boundary was verified.

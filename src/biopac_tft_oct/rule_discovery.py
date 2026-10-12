@@ -34,8 +34,10 @@ class DEJGuidedDynamicSignalExtractionRule:
             raise ValueError(f"No frozen DEJ rule for site '{site}'. Known sites: {known}.")
         slopes = np.asarray(self.slopes_by_site[key], dtype=float)
         intercepts = np.asarray(self.intercepts_by_site[key], dtype=float)
-        if slopes.shape != intercepts.shape:
+        if slopes.shape != (5,) or intercepts.shape != (5,):
             raise ValueError(f"Inconsistent slope/intercept arrays for site '{site}'.")
+        if not np.isfinite(slopes).all() or not np.isfinite(intercepts).all() or not np.isfinite(dej_depth):
+            raise ValueError("Frozen coefficients and the OCT-derived anatomical scale must be finite.")
         return np.rint(slopes * float(dej_depth) + intercepts).astype(int)
 
     def window_ranges(self, *, site: str, dej_depth: float, n_depth: int) -> list[tuple[int, int]]:
@@ -46,9 +48,9 @@ class DEJGuidedDynamicSignalExtractionRule:
             raise ValueError("n_depth must be positive.")
         windows: list[tuple[int, int]] = []
         for center in self.centres(site=site, dej_depth=dej_depth):
-            start = max(0, int(center) - self.half_width)
-            stop = min(n_depth, int(center) + self.half_width + 1)
-            if start >= stop:
+            start = int(center) - self.half_width
+            stop = int(center) + self.half_width + 1
+            if start < 0 or stop > n_depth:
                 raise ValueError("A derived window lies outside the OCT depth range.")
             windows.append((start, stop))
         return windows
@@ -83,11 +85,17 @@ def fit_dej_guided_dynamic_signal_extraction_rule(
         raise ValueError(f"Discovery table is missing required columns: {missing}")
     if len(window_center_cols) != 5:
         raise ValueError("Exactly five window-centre columns are required.")
+    if half_width != 5:
+        raise ValueError("The manuscript rule uses five 11-pixel windows (half_width=5).")
+    if discovery_table.empty:
+        raise ValueError("The rule-discovery table cannot be empty.")
 
     slopes_by_site: dict[str, tuple[float, ...]] = {}
     intercepts_by_site: dict[str, tuple[float, ...]] = {}
     for site, group in discovery_table.groupby(discovery_table[site_col].astype(str).str.lower(), sort=True):
-        numeric = group[[dej_depth_col, *window_center_cols]].apply(pd.to_numeric, errors="coerce").dropna()
+        numeric = group[[dej_depth_col, *window_center_cols]].apply(pd.to_numeric, errors="coerce")
+        if not np.isfinite(numeric.to_numpy()).all():
+            raise ValueError(f"Site '{site}' contains missing or nonfinite discovery values.")
         if len(numeric) < 2:
             raise ValueError(f"Site '{site}' has fewer than two complete discovery sessions.")
         x = numeric[dej_depth_col].to_numpy(dtype=float)

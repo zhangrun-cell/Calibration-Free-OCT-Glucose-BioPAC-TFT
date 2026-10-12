@@ -26,6 +26,7 @@ INPUT_SOURCE_SETTINGS: dict[str, InputSourceSetting] = {
     "time_plus_oct": InputSourceSetting(use_time=True, use_static=False, use_oct=True),
     "time_plus_static": InputSourceSetting(use_time=True, use_static=True, use_oct=False),
     "full": InputSourceSetting(use_time=True, use_static=True, use_oct=True),
+    "oct_only": InputSourceSetting(use_time=False, use_static=False, use_oct=True),
 }
 
 

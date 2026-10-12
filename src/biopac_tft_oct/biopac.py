@@ -20,6 +20,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
+from scipy.interpolate import PchipInterpolator
 
 
 @dataclass(frozen=True)
@@ -37,6 +38,8 @@ def _as_time_depth(oct_signal: np.ndarray) -> np.ndarray:
     x = np.asarray(oct_signal, dtype=float)
     if x.ndim != 2:
         raise ValueError("oct_signal must be a 2-D array with shape (time, depth).")
+    if min(x.shape) == 0 or not np.isfinite(x).all():
+        raise ValueError("OCT intensities must be nonempty and finite.")
     return x
 
 
@@ -132,6 +135,9 @@ def morphology_align(
 
     for t in range(n_time):
         current = x[t]
+        if t == 0:
+            aligned[t] = current
+            continue
         cur_envelope = _structural_envelope(current, envelope_sigma_current)
         local_shifts = np.zeros(n_segments, dtype=float)
 
@@ -160,7 +166,11 @@ def morphology_align(
             local_shifts[s] = best_shift
 
         shifts[t] = local_shifts
-        warp_field = np.interp(depth_axis, centers, local_shifts, left=local_shifts[0], right=local_shifts[-1])
+        if n_segments == 1:
+            warp_field = np.full(n_depth, local_shifts[0])
+        else:
+            # The manuscript uses shape-preserving cubic interpolation of segment shifts.
+            warp_field = PchipInterpolator(centers, local_shifts)(np.clip(depth_axis, centers[0], centers[-1]))
         query_points = depth_axis + warp_field
         aligned[t] = np.interp(query_points, depth_axis, current, left=0.0, right=0.0)
 

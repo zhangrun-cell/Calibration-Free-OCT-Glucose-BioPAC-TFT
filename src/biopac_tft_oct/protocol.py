@@ -40,6 +40,8 @@ class PredictionProtocol:
             raise ValueError("output_chunk_length must be at least 1.")
         if self.n_subject_folds < 2:
             raise ValueError("n_subject_folds must be at least 2.")
+        if not 0 < self.aggregation_keep_ratio <= 1:
+            raise ValueError("aggregation_keep_ratio must be in (0, 1].")
 
     @property
     def first_forecastable_index(self) -> int:
@@ -93,6 +95,8 @@ def subjectwise_fivefold_splits(
     """
 
     names = sorted({str(subject) for subject in subjects})
+    if n_splits < 3:
+        raise ValueError("Disjoint train/validation/test roles require at least three folds.")
     if len(names) < n_splits:
         raise ValueError(f"Need at least {n_splits} unique subjects, received {len(names)}.")
 

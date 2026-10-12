@@ -56,7 +56,7 @@ Bio-PAC aligns the depth morphology before optical compensation:
    between the whole structural envelope of the current segment and the
    corresponding reference segment. The correlation is therefore computed over
    the whole segment curve, not only at isolated local extrema.
-4. Segment shifts are interpolated into a continuous depth-warping field
+4. Segment shifts are interpolated with PCHIP into a continuous depth-warping field
    `Delta_t(z)`.
 5. The A-scan is resampled using this field to obtain `I_align(t, z)`.
 
@@ -171,25 +171,18 @@ selected from the prediction cohort. Reference blood glucose trajectories are
 used only during that discovery analysis to establish fixed, site-specific
 relationships between OCT-derived DEJ depth and the five window centres.
 
-For every prediction session, the first depth-axis intensity peak is determined
-from OCT morphology after skipping the first 10 pixels. To avoid selecting an
-unrelated structural peak, the search is restricted to the expected
-site-specific DEJ range:
-
-```text
-arm/wrist: 27-45 pixels
-finger:    55-75 pixels
-```
-
-The prediction-session DEJ depth is then inserted into the frozen mapping for
-its measurement site:
+At each acquisition, epidermal and DEJ-associated peaks are detected from the
+current aligned morphology profile. Their depth difference supplies the
+anatomical thickness scale. The two search ranges are acquisition-specific and
+must be declared, rather than inferred from an averaged figure or future frames.
+The resulting thickness scale is inserted into the frozen site-specific mapping:
 
 ```text
 c_j,m = round(a_j,m * T_m + b_j,m),  j = 1, ..., 5
 W_j = [c_j - 5, c_j + 5]
 ```
 
-Here, `T_m` is the OCT-derived DEJ depth for site `m`; `(a_j,m, b_j,m)` are
+Here, `T_m` is the OCT-derived epidermal-peak-to-DEJ thickness for site `m`; `(a_j,m, b_j,m)` are
 locked discovery-cohort coefficients. Thus, the five centres move with tissue
 morphology while reference blood glucose in the prediction cohort is neither
 used for window selection nor for adaptation.
@@ -197,20 +190,22 @@ used for window selection nor for adaptation.
 Implementation entry point:
 
 ```python
-from biopac_tft_oct.features import dej_guided_dynamic_signal_features
-from biopac_tft_oct.rule_discovery import fit_dej_guided_dynamic_signal_extraction_rule
+from biopac_tft_oct.pipeline import sequential_signal_features
 
-rule = fit_dej_guided_dynamic_signal_extraction_rule(discovery_table)
-features, windows, dej_depth = dej_guided_dynamic_signal_features(
-    corrected_oct=corrected,
+features, peak_depths, centres = sequential_signal_features(
+    oct_profiles,
     rule=rule,
     site="arm",
+    epidermal_range=declared_epidermal_range,
+    dej_range=declared_dej_range,
 )
 ```
 
-The discovery table contains one row per discovery session, with `site`,
-`dej_depth`, and five `window_center_1` to `window_center_5` columns. It is
-not constructed from the prediction cohort.
+The locked `rule` is fitted using `scripts/fit_dej_rule.py` from one row per
+discovery session: participant/session IDs, site, thickness scale and five
+absolute-correlation peak centres. A cohort manifest verifies separation from
+the prediction cohort. The original averaged-anchor demo helpers remain offline
+examples; they are not the sequential extraction entry point.
 
 The resulting feature matrix has shape:
 

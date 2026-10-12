@@ -15,6 +15,9 @@ def dense_candidate_average(values: list[float] | np.ndarray, keep_ratio: float 
     high-density candidate averaging used in the manuscript.
     """
 
+    keep_ratio = float(keep_ratio)
+    if not 0 < keep_ratio <= 1:
+        raise ValueError("keep_ratio must be in (0, 1].")
     arr = np.asarray(values, dtype=float)
     arr = arr[np.isfinite(arr)]
     if arr.size == 0:
@@ -22,7 +25,6 @@ def dense_candidate_average(values: list[float] | np.ndarray, keep_ratio: float 
     if arr.size == 1:
         return float(arr[0])
 
-    keep_ratio = float(np.clip(keep_ratio, 0.0, 1.0))
     k = max(1, int(np.floor(arr.size * keep_ratio)))
     sorted_arr = np.sort(arr)
     if k >= sorted_arr.size:
